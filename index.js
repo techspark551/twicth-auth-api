@@ -1,34 +1,28 @@
-/*
-Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
-
-    http://aws.amazon.com/apache2.0/
-
-or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
-
-*/
-
 // Define our dependencies
+require('dotenv').config();
 var express        = require('express');
 var session        = require('express-session');
 var passport       = require('passport');
 var OAuth2Strategy = require('passport-oauth').OAuth2Strategy;
 var request        = require('request');
 var handlebars     = require('handlebars');
+const cron = require('node-cron');
+const cors = require('cors')
+const fs = require('fs');
+const app = express();
 const port = process.env.PORT || 5000;
 
 // Define our constants, you will change these with your own
 
 // access token : phogw28vccisnjhyq1w46od8ppz527
 // Refresh Token : 	2qrkgj0l81j1a26fqytoateut4qiigfy9g5axfwdyq2mpaob2g
-const TWITCH_CLIENT_ID = 'bn5lbhnr0uw5mah120j2ngeab14atj';
-const TWITCH_SECRET    = '8t9nerw0v4uhgk8p54qgpgi4uuk2ts';
-const SESSION_SECRET   = 'ahfazIsadmin';
-const CALLBACK_URL     = 'http://localhost:5000/auth/twitch/callback';  // You can run locally with - http://localhost:3000/auth/twitch/callback
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+const TWITCH_SECRET    = process.env.TWITCH_SECRET;
+const SESSION_SECRET   = process.env.SESSION_SECRET;
+const CALLBACK_URL     = process.env.CALLBACK_URL;  // You can run locally with - http://localhost:3000/auth/twitch/callback
 
 // Initialize Express and middlewares
-var app = express();
+app.use(cors())
 app.use(session({secret: SESSION_SECRET, resave: false, saveUninitialized: false}));
 app.use(express.static('public'));
 app.use(passport.initialize());
@@ -91,22 +85,39 @@ app.get('/auth/twitch', passport.authenticate('twitch', { scope: 'user_read' }))
 app.get('/auth/twitch/callback', passport.authenticate('twitch', { successRedirect: '/', failureRedirect: '/' }));
 
 // Define a simple template to safely generate HTML with values from user's profile
-var template = handlebars.compile(`
-<html><head><title>Twitch Auth Sample</title></head>
-<table>
-    <tr><th>Access Token</th><td>{{accessToken}}</td></tr>
-    <tr><th>Refresh Token</th><td>{{refreshToken}}</td></tr>
-    <tr><th>Display Name</th><td>{{display_name}}</td></tr>
-    <tr><th>Bio</th><td>{{bio}}</td></tr>
-    <tr><th>Image</th><td>{{logo}}</td></tr>
-</table></html>`);
+
+// var template = handlebars.compile(`
+// <html><head><title>Twitch Auth Sample</title></head>
+// <table>
+//     <tr><th>Access Token</th><td>{{accessToken}}</td></tr>
+//     <tr><th>Refresh Token</th><td>{{refreshToken}}</td></tr>
+//     <tr><th>Display Name</th><td>{{display_name}}</td></tr>
+//     <tr><th>Bio</th><td>{{bio}}</td></tr>
+//     <tr><th>Image</th><td>{{logo}}</td></tr>
+// </table></html>`);
 
 // If user has an authenticated session, display it, otherwise display link to authenticate
 app.get('/', function (req, res) {
   if(req.session && req.session.passport && req.session.passport.user) {
-    res.send(template(req.session.passport.user));
+    const authData = req.session.passport.user;
+    fs.writeFile('authToken.txt', JSON.stringify(authData), (err) => {
+      if (err) return console.log(err);      
+    });
+    res.redirect('https://shopifyrebellion.gg/?_ab=0&_fd=0&_sc=1');
+    // res.send({ message : 'success',data : req.session.passport.user})
+    // res.send(template(req.session.passport.user));
   } else {
     res.send('<html><head><title>Twitch Auth Sample</title></head><a href="/auth/twitch"><img src="http://ttv-api.s3.amazonaws.com/assets/connect_dark.png"></a></html>');
+  }
+});
+
+app.get('/getAuth', (req,res) => {
+  try {
+    fs.readFile('authToken.txt', 'utf8', (err,data) => {
+      res.status(200).json({message : 'success',clientID : TWITCH_CLIENT_ID, SecretKey : TWITCH_SECRET ,data : data})
+    })
+  } catch (err) {
+    res.status(401).json({message : 'error', data : err })
   }
 });
 
